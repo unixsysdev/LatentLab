@@ -1,5 +1,11 @@
 # LatentLab
 
+<div align="center">
+  <video src="media/demo.mp4" width="100%" controls autoplay loop muted></video>
+  <br/>
+  <em>A 3D visualization of Large Language Model latent spaces</em>
+</div>
+
 Local LLM latent space visualization tool for exploring how thoughts evolve in transformer models.
 
 ## Features
