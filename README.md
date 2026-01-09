@@ -3,7 +3,6 @@
 <div align="center">
   <img src="media/demo.gif" alt="LatentLab Demo" width="100%">
   <br/>
-  <em>A 3D visualization of Large Language Model latent spaces</em>
 </div>
 
 Local LLM latent space visualization tool for exploring how thoughts evolve in transformer models.
