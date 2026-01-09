@@ -17,10 +17,10 @@ const DEFAULT_VALUES = {
     },
     steering: {
         prompt: 'I feel really angry about',
-        positive_concept: 'Love',
-        negative_concept: 'Hate',
-        layer: 15,
-        strength: 1.5
+        positive_concept: 'Calmness',
+        negative_concept: 'Anger',
+        layer: 16,
+        strength: 1.0
     }
 }
 

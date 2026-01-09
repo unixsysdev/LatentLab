@@ -30,9 +30,7 @@ function AnimatedPoint({ position, color, size = 0.15, label, metadata = {} }) {
 
     useFrame((state) => {
         if (meshRef.current) {
-            meshRef.current.scale.setScalar(hovered ? 1.3 : 1)
-            // Gentle floating animation
-            meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 2 + position[0]) * 0.02
+            meshRef.current.scale.setScalar(hovered ? 1.5 : 1)
         }
     })
 

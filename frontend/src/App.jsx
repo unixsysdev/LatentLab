@@ -104,78 +104,80 @@ function App() {
                 </div>
             </header>
 
-            {/* Sidebar */}
-            <aside className="sidebar">
-                <div className="sidebar-section">
-                    <h3>Experiments</h3>
-                    <div className="experiment-tabs">
-                        {EXPERIMENTS.map(exp => (
-                            <button
-                                key={exp.id}
-                                className={`experiment-tab ${selectedExperiment === exp.id ? 'active' : ''}`}
-                                onClick={() => {
-                                    setSelectedExperiment(exp.id)
-                                    setExperimentResult(null)
-                                    setError(null)
-                                }}
-                            >
-                                {exp.icon} {exp.name}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {currentExperiment && (
+            <div className="main-container">
+                {/* Sidebar */}
+                <aside className="sidebar">
                     <div className="sidebar-section">
-                        <div className="experiment-description">
-                            <p>{currentExperiment.description}</p>
+                        <h3>Experiments</h3>
+                        <div className="experiment-tabs">
+                            {EXPERIMENTS.map(exp => (
+                                <button
+                                    key={exp.id}
+                                    className={`experiment-tab ${selectedExperiment === exp.id ? 'active' : ''}`}
+                                    onClick={() => {
+                                        setSelectedExperiment(exp.id)
+                                        setExperimentResult(null)
+                                        setError(null)
+                                    }}
+                                >
+                                    {exp.icon} {exp.name}
+                                </button>
+                            ))}
                         </div>
-
-                        <ExperimentForm
-                            experimentId={currentExperiment.id}
-                            onSubmit={handleRunExperiment}
-                            isLoading={isLoading}
-                        />
-
-                        {error && (
-                            <div style={{
-                                color: '#ff4444',
-                                marginTop: '1rem',
-                                padding: '0.5rem',
-                                background: 'rgba(255, 68, 68, 0.1)',
-                                borderRadius: '6px',
-                                fontSize: '0.85rem'
-                            }}>
-                                {error}
-                            </div>
-                        )}
                     </div>
-                )}
-            </aside>
 
-            {/* Main Visualization Area */}
-            <main className="main-content">
-                <div className="canvas-container">
-                    {isLoading && (
-                        <div className="loading-overlay">
-                            <div style={{ textAlign: 'center' }}>
-                                <div className="loading-spinner"></div>
-                                <p className="loading-text">Running experiment...</p>
+                    {currentExperiment && (
+                        <div className="sidebar-section">
+                            <div className="experiment-description">
+                                <p>{currentExperiment.description}</p>
                             </div>
+
+                            <ExperimentForm
+                                experimentId={currentExperiment.id}
+                                onSubmit={handleRunExperiment}
+                                isLoading={isLoading}
+                            />
+
+                            {error && (
+                                <div style={{
+                                    color: '#ff4444',
+                                    marginTop: '1rem',
+                                    padding: '0.5rem',
+                                    background: 'rgba(255, 68, 68, 0.1)',
+                                    borderRadius: '6px',
+                                    fontSize: '0.85rem'
+                                }}>
+                                    {error}
+                                </div>
+                            )}
                         </div>
                     )}
+                </aside>
 
-                    <ThoughtVisualizer
-                        experimentResult={experimentResult}
-                        experimentType={selectedExperiment}
-                    />
-                </div>
+                {/* Main Visualization Area */}
+                <main className="main-content">
+                    <div className="canvas-container">
+                        {isLoading && (
+                            <div className="loading-overlay">
+                                <div style={{ textAlign: 'center' }}>
+                                    <div className="loading-spinner"></div>
+                                    <p className="loading-text">Running experiment...</p>
+                                </div>
+                            </div>
+                        )}
 
-                {experimentResult && (
-                    <ResultsPanel result={experimentResult} />
-                )}
-            </main>
-        </div>
+                        <ThoughtVisualizer
+                            experimentResult={experimentResult}
+                            experimentType={selectedExperiment}
+                        />
+                    </div>
+
+                    {experimentResult && (
+                        <ResultsPanel result={experimentResult} />
+                    )}
+                </main>
+            </div>
+        </div >
     )
 }
 

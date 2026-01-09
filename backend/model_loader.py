@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Default model - easy to swap
 DEFAULT_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
-
+#DEFAULT_MODEL = "Qwen/Qwen3-4B-Thinking-2507"
+#DEFAULT_MODEL = "openai/gpt-oss-20b"
+#DEFAULT_MODEL = "Qwen/Qwen3-30B-A3B"
+#DEFAULT_MODEL = "Qwen/Qwen3-VL-8B-Thinking"
 
 class HookedModel:
     """
@@ -59,13 +62,28 @@ class HookedModel:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
         # Load model
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=dtype,
-            device_map="auto" if self.device != "cpu" else None,
-            trust_remote_code=True,
-            attn_implementation="flash_attention_2" if self.device != "cpu" else "eager",
-        )
+        # Load model with fallback
+        try:
+            from transformers import AutoModel
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=dtype,
+                    device_map="auto" if self.device != "cpu" else None,
+                    trust_remote_code=True,
+                    attn_implementation="flash_attention_2" if self.device != "cpu" else "eager",
+                )
+            except (ValueError, OSError) as e:
+                logger.warning(f"AutoModelForCausalLM failed ({e}), falling back to AutoModel for generic/vision tasks")
+                self.model = AutoModel.from_pretrained(
+                    model_name,
+                    torch_dtype=dtype,
+                    device_map="auto" if self.device != "cpu" else None,
+                    trust_remote_code=True,
+                    attn_implementation="flash_attention_2" if self.device != "cpu" else "eager",
+                )
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model {model_name}: {e}")
         
         if self.device == "cpu":
             self.model = self.model.to(self.device)
@@ -74,14 +92,68 @@ class HookedModel:
         
         # Get model config
         self.config = self.model.config
-        self.n_layers = self.config.num_hidden_layers
-        self.hidden_size = self.config.hidden_size
+        # self.n_layers = getattr(self.config, "num_hidden_layers", getattr(self.config, "n_layer", 0))
+        try:
+            # Most robust way: count the actual layers we found
+            layers_list = self._get_transformer_layers()
+            self.n_layers = len(layers_list)
+        except:
+             self.n_layers = getattr(self.config, "num_hidden_layers", getattr(self.config, "n_layer", 0))
+             
+        self.hidden_size = getattr(self.config, "hidden_size", getattr(self.config, "n_embd", 0))
         
         logger.info(f"Model loaded: {self.n_layers} layers, hidden_size={self.hidden_size}")
         
         # Hook storage
         self._activations: Dict[str, torch.Tensor] = {}
         self._hooks: List[torch.utils.hooks.RemovableHandle] = []
+
+    def _get_transformer_layers(self):
+        """Auto-detect and return the list of transformer layers"""
+        # Debug structure if needed
+        # logger.info(f"Model structure: {self.model}")
+        
+        if hasattr(self.model, "model") and hasattr(self.model.model, "layers"):
+            return self.model.model.layers  # Llama, Qwen, Mistral
+        elif hasattr(self.model, "gpt_neox") and hasattr(self.model.gpt_neox, "layers"):
+            return self.model.gpt_neox.layers  # GPT-NeoX
+        elif hasattr(self.model, "transformer") and hasattr(self.model.transformer, "h"):
+            return self.model.transformer.h  # GPT-2, Falcon, Bloom
+        elif hasattr(self.model, "layers"):
+            return self.model.layers  # Fallback (Qwen3VLModel might be here directly?)
+        
+        # Deep recursion check for VL models that might be wrapped
+        # e.g. Qwen2VLModel has .layers
+        # But if loaded via AutoModel, we might have self.model as the Qwen2VLModel directly
+        # The error says self.model IS Qwen3VLModel.
+        # So we check if Qwen3VLModel has .layers (it should). 
+        # But maybe it's in .video_model or .language_model?
+        # Qwen-VL often has .visual and .model (text).
+        
+        # Checking for Qwen-VL specific structure (often .language_model or just .layers if merged)
+        if hasattr(self.model, "language_model") and hasattr(self.model.language_model, "model"):
+             return self.model.language_model.model.layers
+             
+        # Qwen3VLModel via AutoModel seem to store submodules in _modules but not as direct attrs?
+        # Check _modules keys
+        if hasattr(self.model, "_modules"):
+            modules = self.model._modules
+            # logger.info(f"Model submodules: {modules.keys()}")
+            
+            # Common names for text backbone in VL models
+            for key in ["model", "text_model", "language_model", "llm"]:
+                if key in modules:
+                    sub = modules[key]
+                    if hasattr(sub, "layers"): return sub.layers
+                    if hasattr(sub, "model") and hasattr(sub.model, "layers"): return sub.model.layers
+            
+        raise ValueError(f"Could not find layers in model {type(self.model)}. Submodules: {list(self.model._modules.keys()) if hasattr(self.model, '_modules') else 'None'}")
+
+    def clean_thinking_tokens(self, text: str) -> str:
+        """Remove <think>...</think> blocks to avoid polluting semantic space"""
+        import re
+        return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
         
     def _make_hook(self, name: str) -> Callable:
         """Create a hook function that stores activation"""
@@ -100,12 +172,16 @@ class HookedModel:
         if layers is None:
             layers = list(range(self.n_layers))
             
-        # Qwen3 uses model.layers[i] structure
+        model_layers = self._get_transformer_layers()
+        
         for i in layers:
-            layer = self.model.model.layers[i]
-            name = f"layer_{i}"
-            handle = layer.register_forward_hook(self._make_hook(name))
-            self._hooks.append(handle)
+            if i < len(model_layers):
+                layer = model_layers[i]
+                name = f"layer_{i}"
+                handle = layer.register_forward_hook(self._make_hook(name))
+                self._hooks.append(handle)
+            else:
+                logger.warning(f"Layer {i} out of bounds (max {len(model_layers)-1})")
             
         logger.debug(f"Registered hooks on {len(layers)} layers")
         
@@ -154,7 +230,7 @@ class HookedModel:
         outputs = self.model(**inputs)
         
         result = {
-            "logits": outputs.logits,
+            "logits": getattr(outputs, "logits", None),
             "activations": self.get_activations(),
             "input_ids": inputs["input_ids"],
             "tokens": [self.tokenizer.decode([t]) for t in inputs["input_ids"][0]]
@@ -195,8 +271,19 @@ class HookedModel:
         Get embedding for text by taking mean of last layer hidden states.
         This is a proxy for dedicated embedding models.
         """
+        # Clean thinking tokens if present
+        text = self.clean_thinking_tokens(text)
+        
         result = self.forward_with_cache(text, layers=[self.n_layers - 1])
-        last_layer = result["activations"][f"layer_{self.n_layers - 1}"]
+        # Safe logical check for layer existence
+        layer_key = f"layer_{self.n_layers - 1}"
+        if layer_key not in result["activations"]:
+             # Fallback: take the last available layer
+             last_key = list(result["activations"].keys())[-1]
+             last_layer = result["activations"][last_key]
+        else:
+             last_layer = result["activations"][layer_key]
+             
         # Mean pool over sequence
         embedding = last_layer.mean(dim=1)
         return embedding.squeeze(0)
@@ -219,10 +306,14 @@ class HookedModel:
             else:
                 return output + (steering_vector.to(output.device) * strength)
         
-        layer = self.model.model.layers[layer_idx]
-        handle = layer.register_forward_hook(steering_hook)
-        self._hooks.append(handle)
-        return handle
+        model_layers = self._get_transformer_layers()
+        if layer_idx < len(model_layers):
+            layer = model_layers[layer_idx]
+            handle = layer.register_forward_hook(steering_hook)
+            self._hooks.append(handle)
+            return handle
+        else:
+            raise ValueError(f"Layer {layer_idx} out of bounds")
 
 
 def load_model(
