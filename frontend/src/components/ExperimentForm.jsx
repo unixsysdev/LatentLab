@@ -11,6 +11,9 @@ const DEFAULT_VALUES = {
         concept: 'Apple',
         num_attributes: 15
     },
+    prism: {
+        concept: 'Love'
+    },
     mirror: {
         source_chain: ['Rome Rise', 'Rome Peak', 'Rome Fall'],
         target_domain: 'A Dubstep Track'
@@ -109,6 +112,22 @@ export default function ExperimentForm({ experimentId, onSubmit, isLoading }) {
                                 />
                                 <span className="slider-value">{values.num_attributes || 15}</span>
                             </div>
+                        </div>
+                    </>
+                )
+
+            case 'prism':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label>Concept to Analyze</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={values.concept || ''}
+                                onChange={(e) => handleChange('concept', e.target.value)}
+                                placeholder="e.g., Love, Democracy, Quantum"
+                            />
                         </div>
                     </>
                 )

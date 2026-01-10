@@ -287,6 +287,76 @@ class HookedModel:
         # Mean pool over sequence
         embedding = last_layer.mean(dim=1)
         return embedding.squeeze(0)
+
+    @torch.no_grad()
+    def unembed(
+        self,
+        vector: torch.Tensor,
+        top_k: int = 10,
+        filter_special: bool = True
+    ) -> List[str]:
+        """
+        Project a vector onto the vocabulary to find semantic neighbors.
+        """
+        # Ensure vector is on the correct device and dtype
+        vector = vector.to(self.model.device).to(self.dtype)
+
+        # Handle batch dim
+        if vector.dim() > 1:
+            vector = vector.view(-1)
+
+        # Normalize for cosine similarity-like effect
+        # (Though strictly logits are dot products, normalization often helps
+        # find semantic direction rather than just magnitude)
+        vector = vector / vector.norm()
+
+        # Get LM Head
+        if hasattr(self.model, "lm_head"):
+            lm_head = self.model.lm_head
+        elif hasattr(self.model, "embed_out"):
+            lm_head = self.model.embed_out
+        else:
+            # Tie weights fallback (e.g. GPT-2)
+            # This is a bit hacky but works for many models where wte and lm_head are shared
+            model_layers = self._get_transformer_layers()
+            # Often input embeddings are at self.model.model.embed_tokens or similar
+            # If we can't find lm_head, we might fail.
+            # But let's try to access the underlying linear layer if possible.
+            # For now, just raise warning if not found
+            logger.warning("Could not find lm_head for unembedding.")
+            return []
+
+        # Project
+        logits = lm_head(vector)
+
+        # Filter special tokens
+        if filter_special:
+            # Simple heuristic: filter out non-alphanumeric or tokens with special chars
+            # But simpler: just use valid IDs
+            # Note: We'll filter AFTER getting top-k to avoid expensive full-vocab scan
+            # Actually, getting top 50 then filtering is better
+            top_indices = torch.topk(logits, k=max(50, top_k * 2)).indices
+        else:
+            top_indices = torch.topk(logits, k=top_k).indices
+
+        results = []
+        for idx in top_indices:
+            token = self.tokenizer.decode([idx.item()])
+            clean_token = token.strip()
+
+            # Basic filtering
+            if filter_special:
+                if not clean_token or len(clean_token) < 2:
+                    continue
+                # Skip if it looks like a special token (brackets etc)
+                if clean_token.startswith('<') and clean_token.endswith('>'):
+                    continue
+
+            results.append(clean_token)
+            if len(results) >= top_k:
+                break
+
+        return results
     
     def inject_at_layer(
         self,
