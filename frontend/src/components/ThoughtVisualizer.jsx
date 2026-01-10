@@ -215,6 +215,27 @@ function Scene({ experimentResult, experimentType }) {
     // Color mapping based on point metadata
     const getPointColor = (point, index) => {
         const type = point.metadata?.type
+        const colorName = point.metadata?.color
+
+        // Blackhole experiment - use dynamic color from metadata
+        if (colorName && COLORS[colorName]) {
+            return COLORS[colorName]
+        }
+
+        // Blackhole start/end
+        if (type === 'start') return COLORS.primary
+        if (type === 'end') return COLORS.secondary
+
+        // Path types for blackhole
+        if (type?.startsWith('path_')) {
+            // Try to get color from metadata, or use path-specific color
+            if (type === 'path_semantic') return COLORS.primary
+            if (type === 'path_emotional') return COLORS.secondary
+            if (type === 'path_categorical') return COLORS.tertiary
+            if (type === 'path_associative') return COLORS.accent
+            if (type === 'path_metaphorical') return COLORS.positive
+        }
+
         if (type === 'center') return COLORS.accent
         if (type === 'anti') return COLORS.secondary
         if (type === 'source') return COLORS.primary
@@ -224,6 +245,7 @@ function Scene({ experimentResult, experimentType }) {
         if (type === 'original') return COLORS.primary
         if (type === 'steered') return COLORS.secondary
         if (type === 'prompt') return COLORS.text
+        if (type === 'component') return COLORS.tertiary
 
         // Gradient for wormhole
         if (experimentType === 'wormhole') {
@@ -238,9 +260,14 @@ function Scene({ experimentResult, experimentType }) {
 
     const getPointSize = (point, index) => {
         const type = point.metadata?.type
+        // Blackhole start/end points are bigger
+        if (type === 'start' || type === 'end') return 0.3
         if (type === 'center') return 0.25
         if (type === 'anti') return 0.2
+        if (type === 'source') return 0.25
         if (point.metadata?.is_anchor) return 0.2
+        // Path points are smaller
+        if (type?.startsWith('path_')) return 0.15
         return 0.12
     }
 
@@ -254,17 +281,48 @@ function Scene({ experimentResult, experimentType }) {
                 const p1 = points[i].coords_3d
                 const p2 = points[j].coords_3d
 
-                // Different styling for mirror connections
+                // Get connection color from point metadata (for blackhole paths)
+                const pointColor = points[j].metadata?.color || points[i].metadata?.color
+                const pathType = points[j].metadata?.type || points[i].metadata?.type
+
+                // Determine line color
+                let lineColor = COLORS.primary
+                let lineWidth = 2
+
+                // Blackhole experiment - color by path
+                if (pointColor && COLORS[pointColor]) {
+                    lineColor = COLORS[pointColor]
+                } else if (pathType?.startsWith('path_')) {
+                    if (pathType === 'path_semantic') lineColor = COLORS.primary
+                    else if (pathType === 'path_emotional') lineColor = COLORS.secondary
+                    else if (pathType === 'path_categorical') lineColor = COLORS.tertiary
+                    else if (pathType === 'path_associative') lineColor = COLORS.accent
+                    else if (pathType === 'path_metaphorical') lineColor = COLORS.positive
+                }
+
+                // Prism connections: source to component should be bright
+                const isPrismConnection =
+                    points[i].metadata?.type === 'source' && points[j].metadata?.type === 'component'
+                if (isPrismConnection) {
+                    lineColor = COLORS.accent
+                }
+
+                // Mirror connections (source<->target pairs) should be dimmer
                 const isMirrorConnection =
+                    !isPrismConnection &&
                     points[i].metadata?.type !== points[j].metadata?.type &&
                     (points[i].metadata?.type === 'source' || points[i].metadata?.type === 'target')
+                if (isMirrorConnection) {
+                    lineColor = COLORS.grid
+                    lineWidth = 1
+                }
 
                 return (
                     <GlowingLine
                         key={idx}
                         points={[p1, p2]}
-                        color={isMirrorConnection ? COLORS.grid : COLORS.primary}
-                        lineWidth={isMirrorConnection ? 1 : 2}
+                        color={lineColor}
+                        lineWidth={lineWidth}
                     />
                 )
             })}

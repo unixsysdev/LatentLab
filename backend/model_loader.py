@@ -13,13 +13,24 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Available models for UI selection
+AVAILABLE_MODELS = [
+    {"id": "google/gemma-3-270m", "name": "Gemma 3 270M", "size": "270M"},
+    {"id": "google/gemma-3-1b-it", "name": "Gemma 3 1B", "size": "1B"},
+    {"id": "google/gemma-3-4b-it", "name": "Gemma 3 4B", "size": "4B"},
+    {"id": "google/gemma-3n-E4B-it", "name": "Gemma 3n E4B", "size": "4B"},
+    {"id": "Qwen/Qwen3-0.6B", "name": "Qwen3 0.6B", "size": "0.6B"},
+    {"id": "Qwen/Qwen3-4B-Instruct-2507", "name": "Qwen3 4B", "size": "4B"},
+    {"id": "Qwen/Qwen3-4B-Thinking-2507", "name": "Qwen3 4B Thinking", "size": "4B"},
+    {"id": "Qwen/Qwen3-14B-FP8", "name": "Qwen3 14B FP8", "size": "14B"},
+    {"id": "Qwen/Qwen3-30B-A3B", "name": "Qwen3 30B A3B", "size": "30B"},
+    {"id": "Qwen/Qwen3-VL-8B-Thinking", "name": "Qwen3 VL 8B", "size": "8B"},
+    {"id": "openai/gpt-oss-20b", "name": "GPT-OSS 20B", "size": "20B"},
+]
 
-# Default model - easy to swap
-DEFAULT_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
-#DEFAULT_MODEL = "Qwen/Qwen3-4B-Thinking-2507"
-#DEFAULT_MODEL = "openai/gpt-oss-20b"
-#DEFAULT_MODEL = "Qwen/Qwen3-30B-A3B"
-#DEFAULT_MODEL = "Qwen/Qwen3-VL-8B-Thinking"
+# Default model
+DEFAULT_MODEL = "google/gemma-3-1b-it"
+
 
 class HookedModel:
     """
@@ -240,6 +251,78 @@ class HookedModel:
         return result
     
     @torch.no_grad()
+    def forward_with_mlp_residuals(
+        self,
+        text: str,
+        layers: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """
+        Capture MLP residuals (what the MLP adds to the hidden state).
+        
+        This captures the delta from each MLP, which reveals what concepts
+        the model is "adding" at each layer - much cleaner than full hidden state.
+        
+        Returns:
+            Dict with 'mlp_residuals' containing the MLP output deltas
+        """
+        if layers is None:
+            layers = [self.n_layers - 1]  # Default to last layer
+            
+        mlp_residuals = {}
+        mlp_inputs = {}
+        
+        model_layers = self._get_transformer_layers()
+        
+        # Hook to capture MLP input
+        def make_mlp_input_hook(layer_idx):
+            def hook(module, input, output):
+                # MLP input is the hidden state after attention + layernorm
+                if isinstance(input, tuple):
+                    mlp_inputs[f"layer_{layer_idx}"] = input[0].detach()
+                else:
+                    mlp_inputs[f"layer_{layer_idx}"] = input.detach()
+            return hook
+        
+        # Hook to capture MLP output
+        def make_mlp_output_hook(layer_idx):
+            def hook(module, input, output):
+                if isinstance(output, tuple):
+                    out = output[0].detach()
+                else:
+                    out = output.detach()
+                # The residual is output - input (what MLP added)
+                inp_key = f"layer_{layer_idx}"
+                if inp_key in mlp_inputs:
+                    mlp_residuals[inp_key] = out - mlp_inputs[inp_key]
+                else:
+                    mlp_residuals[inp_key] = out
+            return hook
+        
+        handles = []
+        for i in layers:
+            if i < len(model_layers):
+                layer = model_layers[i]
+                # Qwen structure: layer.mlp
+                if hasattr(layer, 'mlp'):
+                    mlp = layer.mlp
+                    handles.append(mlp.register_forward_hook(make_mlp_input_hook(i)))
+                    handles.append(mlp.register_forward_hook(make_mlp_output_hook(i)))
+        
+        inputs = self.tokenize(text)
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        
+        outputs = self.model(**inputs)
+        
+        # Cleanup hooks
+        for h in handles:
+            h.remove()
+        
+        return {
+            "mlp_residuals": mlp_residuals,
+            "tokens": [self.tokenizer.decode([t]) for t in inputs["input_ids"][0]]
+        }
+    
+    @torch.no_grad()
     def generate(
         self,
         prompt: str,
@@ -350,6 +433,18 @@ class HookedModel:
                     continue
                 # Skip if it looks like a special token (brackets etc)
                 if clean_token.startswith('<') and clean_token.endswith('>'):
+                    continue
+                # Skip non-ASCII tokens (Chinese, Russian, etc.)
+                # Only keep tokens that are primarily ASCII alphanumeric
+                try:
+                    clean_token.encode('ascii')
+                except UnicodeEncodeError:
+                    continue
+                # Skip tokens that are just punctuation/symbols
+                if not any(c.isalpha() for c in clean_token):
+                    continue
+                # Skip tokens with weird leading/trailing chars
+                if clean_token[0] in '.,;:!?-_=+[]{}()|\\/@#$%^&*':
                     continue
 
             results.append(clean_token)

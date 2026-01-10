@@ -4,11 +4,15 @@ Wormhole Experiment
 Visualizes the semantic trajectory between two distant concepts.
 """
 
+import time
+import logging
 from typing import Any, Dict
 import numpy as np
 
 from .base import Experiment
 from ..models import ExperimentResult, WormholeInput, VectorPoint
+
+logger = logging.getLogger(__name__)
 
 
 class WormholeExperiment(Experiment):
@@ -29,23 +33,38 @@ class WormholeExperiment(Experiment):
         start_concept = validated.start
         end_concept = validated.end
         steps = validated.steps
+        device = self.engine.device
+        
+        logger.info(f"[WORMHOLE] Starting: '{start_concept}' -> '{end_concept}' ({steps} steps, device: {device})")
+        total_start = time.time()
         
         # Get embeddings
+        logger.info(f"[WORMHOLE] Step 1/4: Embedding endpoints... (GPU)")
+        t0 = time.time()
         v_start = self.engine.embed(start_concept)
         v_end = self.engine.embed(end_concept)
+        logger.info(f"[WORMHOLE] Step 1/4: Done in {time.time()-t0:.2f}s")
         
         # Linear interpolation
+        logger.info(f"[WORMHOLE] Step 2/4: Interpolating {steps} points... (CPU)")
+        t0 = time.time()
         vectors = self.engine.cartographer.interpolate(v_start, v_end, steps)
+        logger.info(f"[WORMHOLE] Step 2/4: Done in {time.time()-t0:.2f}s")
         
         # Project to 3D
+        logger.info(f"[WORMHOLE] Step 3/4: Projecting to 3D... (CPU PCA)")
+        t0 = time.time()
         coords_3d = self.engine.cartographer.project(vectors)
+        logger.info(f"[WORMHOLE] Step 3/4: Done in {time.time()-t0:.2f}s")
         
         # Labels: known anchors at start and end, LLM-generated midpoints
         labels = [start_concept] + ["?"] * (steps - 2) + [end_concept]
         
         # Generate stepping stone concepts using LLM
+        logger.info(f"[WORMHOLE] Step 4/4: Generating {steps-2} waypoint labels... (LLM)")
         current_context = start_concept
         for i in range(1, steps - 1):
+            t0 = time.time()
             alpha = i / (steps - 1)
             prompt = f"""You are identifying concepts that lie on a semantic path.
 
@@ -65,7 +84,7 @@ Respond with ONLY the concept name (1-5 words), nothing else."""
                 ).strip().split('\n')[0]
                 
                 # Clean up the response
-                mid_concept = mid_concept.strip('"\'')[:50]
+                mid_concept = mid_concept.strip("\"'")[:50]
                 if not mid_concept:
                     mid_concept = f"Point {i}"
             except Exception as e:
@@ -73,6 +92,9 @@ Respond with ONLY the concept name (1-5 words), nothing else."""
                 
             labels[i] = mid_concept
             current_context = mid_concept
+            logger.info(f"[WORMHOLE] Waypoint {i}/{steps-2}: '{mid_concept}' ({time.time()-t0:.2f}s)")
+        
+        logger.info(f"[WORMHOLE] Total time: {time.time()-total_start:.2f}s")
         
         # Build result
         points = []

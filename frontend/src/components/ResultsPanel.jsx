@@ -47,6 +47,102 @@ export default function ResultsPanel({ result }) {
                     </div>
                 )
 
+            case 'blackhole':
+                const pathColors = {
+                    semantic: 'var(--accent-cyan)',
+                    emotional: 'var(--accent-magenta)',
+                    categorical: 'var(--accent-green)',
+                    associative: 'var(--accent-orange)',
+                    metaphorical: '#44ff44'
+                }
+                return (
+                    <div>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                            {description}
+                        </p>
+
+                        {/* Start and End */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '1.5rem',
+                            padding: '0.75rem',
+                            background: 'var(--bg-tertiary)',
+                            borderRadius: '8px',
+                        }}>
+                            <span style={{
+                                padding: '0.5rem 1rem',
+                                background: 'rgba(0, 212, 255, 0.2)',
+                                borderRadius: '999px',
+                                border: '1px solid var(--accent-cyan)',
+                                fontWeight: 'bold'
+                            }}>
+                                {metadata?.start}
+                            </span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '1.5rem' }}>→</span>
+                            <span style={{
+                                padding: '0.5rem 1rem',
+                                background: 'rgba(255, 0, 170, 0.2)',
+                                borderRadius: '999px',
+                                border: '1px solid var(--accent-magenta)',
+                                fontWeight: 'bold'
+                            }}>
+                                {metadata?.end}
+                            </span>
+                        </div>
+
+                        {/* Paths */}
+                        {metadata?.paths?.map((path, i) => (
+                            <div key={i} style={{
+                                marginBottom: '1rem',
+                                padding: '0.75rem',
+                                background: 'var(--bg-tertiary)',
+                                borderRadius: '8px',
+                                borderLeft: `3px solid ${pathColors[path.lens] || 'var(--accent-cyan)'}`
+                            }}>
+                                <h5 style={{
+                                    fontSize: '0.75rem',
+                                    color: pathColors[path.lens] || 'var(--accent-cyan)',
+                                    marginBottom: '0.5rem',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em'
+                                }}>
+                                    {path.lens} Path
+                                </h5>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                                    {path.concepts?.map((concept, j) => (
+                                        <React.Fragment key={j}>
+                                            {j > 0 && <span style={{ color: 'var(--text-muted)' }}>→</span>}
+                                            <span style={{
+                                                padding: '0.25rem 0.5rem',
+                                                background: 'var(--bg-secondary)',
+                                                borderRadius: '6px',
+                                                fontSize: '0.8rem',
+                                                border: `1px solid ${pathColors[path.lens] || 'var(--border-subtle)'}`
+                                            }}>
+                                                {concept}
+                                            </span>
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Bridge concepts */}
+                        {metadata?.bridges?.length > 0 && (
+                            <div style={{
+                                marginTop: '1rem',
+                                padding: '0.5rem',
+                                fontSize: '0.75rem',
+                                color: 'var(--text-muted)',
+                            }}>
+                                <strong>Bridge concepts found:</strong> {metadata.bridges.join(', ')}
+                            </div>
+                        )}
+                    </div>
+                )
+
             case 'supernova':
                 return (
                     <div>
@@ -206,9 +302,11 @@ export default function ResultsPanel({ result }) {
             <h4>
                 <span style={{ marginRight: '0.5rem' }}>
                     {experiment_type === 'wormhole' && '🌀'}
+                    {experiment_type === 'blackhole' && '🕳️'}
                     {experiment_type === 'supernova' && '💥'}
                     {experiment_type === 'mirror' && '🪞'}
                     {experiment_type === 'steering' && '🧭'}
+                    {experiment_type === 'prism' && '💎'}
                 </span>
                 Results
             </h4>

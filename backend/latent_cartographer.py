@@ -187,12 +187,12 @@ class LatentCartographer:
             # Handle different shapes
             if len(act.shape) == 3:
                 # [batch, seq, hidden]
-                vec = act[0, token_idx, :].cpu().numpy()
+                vec = act[0, token_idx, :].float().cpu().numpy()
             elif len(act.shape) == 2:
                 # [seq, hidden]
-                vec = act[token_idx, :].cpu().numpy()
+                vec = act[token_idx, :].float().cpu().numpy()
             else:
-                vec = act.cpu().numpy().flatten()
+                vec = act.float().cpu().numpy().flatten()
                 
             # Project to 3D
             coords = self.project(vec)

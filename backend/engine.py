@@ -90,12 +90,21 @@ class LatentSpaceEngine:
         **kwargs
     ) -> str:
         """Generate text from prompt"""
-        return self.model.generate(
+        import re
+        result = self.model.generate(
             prompt,
             max_new_tokens=max_tokens,
             temperature=temperature,
             **kwargs
         )
+        
+        # Strip thinking tokens from models like Qwen3-Thinking
+        # Remove <think>...</think> blocks
+        result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL)
+        # Also remove just opening <think> if not closed
+        result = re.sub(r'<think>.*', '', result, flags=re.DOTALL)
+        
+        return result.strip()
     
     def trace_thought(
         self,

@@ -7,6 +7,12 @@ const DEFAULT_VALUES = {
         end: 'Space Station',
         steps: 7
     },
+    blackhole: {
+        start: 'Love',
+        end: 'War',
+        num_paths: 3,
+        steps_per_path: 3
+    },
     supernova: {
         concept: 'Apple',
         num_attributes: 15
@@ -82,6 +88,58 @@ export default function ExperimentForm({ experimentId, onSubmit, isLoading }) {
                                     onChange={(e) => handleChange('steps', parseInt(e.target.value))}
                                 />
                                 <span className="slider-value">{values.steps || 7}</span>
+                            </div>
+                        </div>
+                    </>
+                )
+
+            case 'blackhole':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label>Start Concept</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={values.start || ''}
+                                onChange={(e) => handleChange('start', e.target.value)}
+                                placeholder="e.g., Love, Peace, Joy"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>End Concept</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={values.end || ''}
+                                onChange={(e) => handleChange('end', e.target.value)}
+                                placeholder="e.g., War, Anger, Fear"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Number of Paths</label>
+                            <div className="slider-container">
+                                <input
+                                    type="range"
+                                    min="1"
+                                    max="5"
+                                    value={values.num_paths || 3}
+                                    onChange={(e) => handleChange('num_paths', parseInt(e.target.value))}
+                                />
+                                <span className="slider-value">{values.num_paths || 3}</span>
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label>Steps per Path</label>
+                            <div className="slider-container">
+                                <input
+                                    type="range"
+                                    min="2"
+                                    max="6"
+                                    value={values.steps_per_path || 3}
+                                    onChange={(e) => handleChange('steps_per_path', parseInt(e.target.value))}
+                                />
+                                <span className="slider-value">{values.steps_per_path || 3}</span>
                             </div>
                         </div>
                     </>

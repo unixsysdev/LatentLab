@@ -27,6 +27,7 @@ from .models import (
     TokenGeneration
 )
 from .engine import get_engine, LatentSpaceEngine
+from .model_loader import AVAILABLE_MODELS
 from .experiments.registry import ExperimentRegistry
 from .visualizers.static import StaticVisualizer
 
@@ -107,6 +108,59 @@ async def list_experiments():
     return ExperimentListResponse(
         experiments=ExperimentRegistry.list_all()
     )
+
+
+@app.get("/api/models")
+async def list_models():
+    """List available models for switching"""
+    try:
+        eng = get_or_load_engine()
+        current_model = eng.model_name
+    except:
+        current_model = None
+    
+    return {
+        "models": AVAILABLE_MODELS,
+        "current": current_model
+    }
+
+
+@app.post("/api/models/switch")
+async def switch_model(body: dict):
+    """Switch to a different model"""
+    global engine
+    model_id = body.get("model_id")
+    
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id required")
+    
+    # Check if model is in available list
+    valid_models = [m["id"] for m in AVAILABLE_MODELS]
+    if model_id not in valid_models:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {model_id}")
+    
+    logger.info(f"Switching to model: {model_id}")
+    
+    # Reset the cached engine
+    from .engine import reset_engine
+    reset_engine()
+    
+    # Free old model
+    if engine is not None:
+        del engine
+        engine = None
+    
+    import gc
+    gc.collect()
+    import torch
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    # Load new model (get_engine will create fresh since we reset)
+    engine = get_engine(model_name=model_id)
+    
+    logger.info(f"Successfully loaded model: {model_id}")
+    return {"status": "ok", "model": model_id}
 
 
 @app.get("/api/experiment/{name}/schema")

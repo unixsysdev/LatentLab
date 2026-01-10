@@ -12,6 +12,12 @@ const EXPERIMENTS = [
         description: 'Visualize the semantic trajectory between two distant concepts. Watch how meaning morphs through the latent space.',
     },
     {
+        id: 'blackhole',
+        name: 'Blackhole',
+        icon: '🕳️',
+        description: 'Find multiple semantic paths between two concepts using activation analysis and LLM-guided discovery. See how different semantic lenses (emotional, categorical, associative) create different routes.',
+    },
+    {
         id: 'supernova',
         name: 'Supernova',
         icon: '💥',
@@ -43,6 +49,26 @@ function App() {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState(null)
     const [serverStatus, setServerStatus] = useState('loading')
+    const [models, setModels] = useState([])
+    const [currentModel, setCurrentModel] = useState(null)
+    const [isModelSwitching, setIsModelSwitching] = useState(false)
+
+    // Fetch available models
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const res = await fetch('/api/models')
+                if (res.ok) {
+                    const data = await res.json()
+                    setModels(data.models || [])
+                    setCurrentModel(data.current)
+                }
+            } catch (e) {
+                console.error('Failed to fetch models:', e)
+            }
+        }
+        fetchModels()
+    }, [])
 
     // Check server health on mount
     useEffect(() => {
@@ -64,6 +90,33 @@ function App() {
         const interval = setInterval(checkHealth, 10000)
         return () => clearInterval(interval)
     }, [])
+
+    const handleModelSwitch = async (modelId) => {
+        if (modelId === currentModel || isModelSwitching) return
+
+        setIsModelSwitching(true)
+        setError(null)
+
+        try {
+            const res = await fetch('/api/models/switch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId })
+            })
+
+            if (res.ok) {
+                setCurrentModel(modelId)
+                setExperimentResult(null) // Clear old result
+            } else {
+                const data = await res.json()
+                setError(data.detail || 'Failed to switch model')
+            }
+        } catch (e) {
+            setError('Failed to switch model: ' + e.message)
+        } finally {
+            setIsModelSwitching(false)
+        }
+    }
 
     const currentExperiment = EXPERIMENTS.find(e => e.id === selectedExperiment)
 
@@ -101,6 +154,24 @@ function App() {
                     <div className="logo-icon">🧠</div>
                     <h1>LatentLab</h1>
                 </div>
+
+                {/* Model Selector */}
+                <div className="model-selector">
+                    <label>Model:</label>
+                    <select
+                        value={currentModel || ''}
+                        onChange={(e) => handleModelSwitch(e.target.value)}
+                        disabled={isModelSwitching}
+                    >
+                        {models.map(m => (
+                            <option key={m.id} value={m.id}>
+                                {m.name} ({m.size})
+                            </option>
+                        ))}
+                    </select>
+                    {isModelSwitching && <span className="model-loading">Loading...</span>}
+                </div>
+
                 <div className="status-badge">
                     <div className={`status-dot ${serverStatus}`}></div>
                     <span>
@@ -115,18 +186,20 @@ function App() {
                 <aside className="sidebar">
                     <div className="sidebar-section">
                         <h3>Experiments</h3>
-                        <div className="experiment-tabs">
+                        <div className="experiment-grid">
                             {EXPERIMENTS.map(exp => (
                                 <button
                                     key={exp.id}
-                                    className={`experiment-tab ${selectedExperiment === exp.id ? 'active' : ''}`}
+                                    className={`experiment-card ${selectedExperiment === exp.id ? 'active' : ''}`}
                                     onClick={() => {
                                         setSelectedExperiment(exp.id)
                                         setExperimentResult(null)
                                         setError(null)
                                     }}
+                                    title={exp.description}
                                 >
-                                    {exp.icon} {exp.name}
+                                    <span className="experiment-card-icon">{exp.icon}</span>
+                                    <span className="experiment-card-name">{exp.name}</span>
                                 </button>
                             ))}
                         </div>

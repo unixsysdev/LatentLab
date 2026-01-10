@@ -62,12 +62,14 @@ def _register_all():
     from .mirror import MirrorExperiment
     from .steering import SteeringExperiment
     from .prism import ConceptPrismExperiment
+    from .blackhole import BlackholeExperiment
     
     ExperimentRegistry.register(WormholeExperiment)
     ExperimentRegistry.register(SupernovaExperiment)
     ExperimentRegistry.register(MirrorExperiment)
     ExperimentRegistry.register(SteeringExperiment)
     ExperimentRegistry.register(ConceptPrismExperiment)
+    ExperimentRegistry.register(BlackholeExperiment)
 
 
 _register_all()
