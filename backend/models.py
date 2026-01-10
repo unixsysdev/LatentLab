@@ -48,6 +48,11 @@ class SupernovaInput(BaseModel):
     num_attributes: int = Field(default=15, ge=5, le=30)
 
 
+class ConceptPrismInput(BaseModel):
+    """Input for Concept Prism experiment"""
+    concept: str = Field(..., description="Concept to analyze")
+
+
 class MirrorInput(BaseModel):
     """Input for Mirror experiment"""
     source_chain: List[str] = Field(..., min_length=2, max_length=10)

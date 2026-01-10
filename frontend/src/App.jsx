@@ -18,6 +18,12 @@ const EXPERIMENTS = [
         description: 'Explode a concept into its semantic dimensions. See the high-dimensional features that make up any idea.',
     },
     {
+        id: 'prism',
+        name: 'Concept Prism',
+        icon: '💎',
+        description: 'Spectrally analyze a concept using reverse embedding. See the exact semantic components that make up a concept vector.',
+    },
+    {
         id: 'mirror',
         name: 'Mirror',
         icon: '🪞',

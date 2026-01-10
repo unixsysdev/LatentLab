@@ -76,6 +76,12 @@ class LatentSpaceEngine:
         vec = self.model.embed(text)
         return vec.float().cpu().numpy()  # Convert to float32 for numpy
     
+    def unembed(self, vector: np.ndarray, top_k: int = 10) -> List[str]:
+        """Project vector back to vocabulary"""
+        # Convert numpy to torch
+        vec_tensor = torch.from_numpy(vector)
+        return self.model.unembed(vec_tensor, top_k=top_k)
+
     def generate(
         self,
         prompt: str,

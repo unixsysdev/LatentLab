@@ -20,6 +20,7 @@ from .models import (
     ExperimentResult,
     WormholeInput,
     SupernovaInput,
+    ConceptPrismInput,
     MirrorInput,
     SteeringInput,
     LiveTraceInput,
@@ -134,6 +135,16 @@ async def run_supernova(inputs: SupernovaInput):
     experiment = ExperimentRegistry.create("supernova", eng)
     if experiment is None:
         raise HTTPException(status_code=404, detail="Supernova experiment not found")
+    return await experiment.run(inputs.model_dump())
+
+
+@app.post("/api/experiment/prism", response_model=ExperimentResult)
+async def run_prism(inputs: ConceptPrismInput):
+    """Run the Concept Prism experiment"""
+    eng = get_or_load_engine()
+    experiment = ExperimentRegistry.create("prism", eng)
+    if experiment is None:
+        raise HTTPException(status_code=404, detail="Prism experiment not found")
     return await experiment.run(inputs.model_dump())
 
 
